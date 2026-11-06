@@ -1,6 +1,5 @@
 ext {
     extName = 'TorBox Direct'
-    pkgNameSuffix = 'en.torboxdirect'
     extClass = '.TorBoxDirect'
     extVersionCode = 1
     isNsfw = false
