@@ -1,0 +1,50 @@
+name: Build and publish test repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Get legacy 1.4 build tooling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method GET repos/keiyoushi/extensions-source/commits \
+            -f until=2026-02-01T00:00:00Z -F per_page=1 --jq '.[0].sha' > upstream-revision
+          revision="$(cat upstream-revision)"
+          test "${#revision}" -eq 40
+          git init upstream
+          git -C upstream fetch --depth 1 https://github.com/keiyoushi/extensions-source.git "$revision"
+          git -C upstream checkout --detach FETCH_HEAD
+          test -f upstream/common.gradle
+          cp -R extension upstream/src/en/torboxdirect
+      - name: Build extension
+        working-directory: upstream
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :src:en:torboxdirect:assembleDebug
+      - name: Generate repository
+        run: |
+          apk="$(find upstream/src/en/torboxdirect/build/outputs/apk -name '*.apk' -print -quit)"
+          test -n "$apk"
+          python3 package_repo.py "$apk"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - uses: actions/deploy-pages@v4
+        id: deploy
